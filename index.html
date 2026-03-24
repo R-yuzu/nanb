@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>猜数字 · 自由拖拽玻璃面板</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none; /* 避免拖拽时误选，输入框内可编辑 */
+        }
+
+        /* 整体背景 — 使用你的 2700*1800 图片（请替换下方链接为实际图片地址） */
+        body {
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            font-family: 'Segoe UI', 'Poppins', 'Roboto', system-ui, -apple-system, 'Helvetica Neue', sans-serif;
+            /* 默认背景图示例（替换为你自己的图片URL） */
+            background-image: url('https://picsum.photos/id/104/2700/1800');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+            position: relative;
+        }
+
+        /* 主窗口 — 高透玻璃（无磨砂模糊） */
+        .glass-panel {
+            position: fixed;
+            width: 90%;
+            max-width: 560px;
+            background: rgba(255, 255, 255, 0.08);   /* 极透玻璃 */
+            backdrop-filter: blur(0px);               /* 无模糊，彻底透明玻璃 */
+            border-radius: 52px;
+            box-shadow: 0 20px 35px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.2);
+            transition: box-shadow 0.2s;
+            z-index: 100;
+            cursor: default;
+            will-change: top, left;
+        }
+
+        /* 拖拽手柄区域 (可自由拖拽整个面板) */
+        .drag-handle {
+            padding: 18px 24px 12px 24px;
+            cursor: grab;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.35);
+            border-radius: 52px 52px 0 0;
+            transition: background 0.2s;
+            touch-action: none;
+            background: rgba(0, 0, 0, 0.03);
+        }
+        .drag-handle:active {
+            cursor: grabbing;
+        }
+        .drag-icon {
+            font-size: 28px;
+            letter-spacing: 4px;
+            color: rgba(255, 255, 255, 0.9);
+            font-weight: 300;
+            text-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        }
+        .title {
+            font-size: 1.55rem;
+            font-weight: 600;
+            color: white;
+            text-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            letter-spacing: 1px;
+        }
+
+        /* 主要内容区 */
+        .game-content {
+            padding: 20px 24px 32px;
+        }
+
+        /* 提示小字 — 磨砂效果 */
+        .hint-text {
+            text-align: center;
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.95);
+            background: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+            display: inline-block;
+            width: 100%;
+            padding: 8px 12px;
+            border-radius: 60px;
+            margin-bottom: 24px;
+            font-weight: 500;
+        }
+
+        /* 四个圆角框 — 内部磨砂 */
+        .digit-inputs {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            flex-wrap: wrap;
+            margin-bottom: 30px;
+        }
+        .digit-box {
+            width: 72px;
+            height: 72px;
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(12px);
+            border-radius: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+            transition: all 0.2s;
+            border: 1px solid rgba(255,255,255,0.5);
+        }
+        .digit-box input {
+            width: 100%;
+            height: 100%;
+            text-align: center;
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: white;
+            font-family: monospace;
+            letter-spacing: 2px;
+            text-shadow: 0 1px 3px black;
+            border-radius: 32px;
+            caret-color: #fff;
+        }
+        .digit-box input:focus {
+            background: rgba(255,255,255,0.25);
+            transform: scale(0.97);
+        }
+        /* 手机适配 */
+        @media (max-width: 550px) {
+            .digit-box {
+                width: 62px;
+                height: 62px;
+                border-radius: 28px;
+            }
+            .digit-box input {
+                font-size: 2.1rem;
+            }
+            .game-content {
+                padding: 16px 20px 24px;
+            }
+            .drag-handle {
+                padding: 14px 20px 10px;
+            }
+        }
+        @media (max-width: 420px) {
+            .digit-box {
+                width: 56px;
+                height: 56px;
+            }
+            .digit-box input {
+                font-size: 1.9rem;
+            }
+            .digit-inputs {
+                gap: 10px;
+            }
+        }
+
+        /* 按钮组 — 磨砂 */
+        .action-buttons {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-bottom: 28px;
+            flex-wrap: wrap;
+        }
+        .btn {
+            padding: 12px 28px;
+            border: none;
+            border-radius: 60px;
+            font-weight: 600;
+            font-size: 1rem;
+            background: rgba(20, 20, 30, 0.6);
+            backdrop-filter: blur(8px);
+            color: white;
+            cursor: pointer;
+            transition: 0.2s;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            border: 1px solid rgba(255,255,255,0.4);
+            font-family: inherit;
+        }
+        .btn-primary {
+            background: rgba(70, 130, 200, 0.7);
+            box-shadow: 0 6px 14px rgba(0, 60, 100, 0.4);
+        }
+        .btn-primary:hover {
+            background: rgba(90, 160, 240, 0.85);
+            transform: scale(0.96);
+        }
+        .btn-secondary:hover {
+            background: rgba(70, 70, 90, 0.8);
+            transform: scale(0.96);
+        }
+        .btn:active {
+            transform: scale(0.94);
+        }
+
+        /* 游戏状态 & 历史记录 — 磨砂 */
+        .info-area {
+            background: rgba(0, 0, 0, 0.35);
+            backdrop-filter: blur(12px);
+            border-radius: 36px;
+            padding: 16px 20px;
+            margin-top: 12px;
+        }
+        .guess-count {
+            display: flex;
+            justify-content: space-between;
+            font-size: 1rem;
+            color: white;
+            font-weight: 500;
+            border-bottom: 1px dashed rgba(255,255,255,0.5);
+            padding-bottom: 10px;
+            margin-bottom: 12px;
+        }
+        .history-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #f9f9f9;
+        }
+        .history-list {
+            max-height: 180px;
+            overflow-y: auto;
+            padding-right: 5px;
+        }
+        .history-item {
+            background: rgba(255,255,255,0.2);
+            margin: 6px 0;
+            padding: 8px 14px;
+            border-radius: 40px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9rem;
+            color: white;
+            font-weight: 500;
+            backdrop-filter: blur(4px);
+        }
+        .history-number {
+            font-family: monospace;
+            font-weight: 700;
+            letter-spacing: 2px;
+        }
+        .history-result {
+            background: rgba(0,0,0,0.45);
+            padding: 2px 12px;
+            border-radius: 40px;
+        }
+
+        /* 胜利小窗口 (磨砂) */
+        .win-toast {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.9);
+            background: rgba(20, 20, 30, 0.85);
+            backdrop-filter: blur(24px);
+            border-radius: 56px;
+            padding: 28px 36px;
+            text-align: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.2s cubic-bezier(0.2, 0.9, 0.4, 1.1);
+            border: 1px solid rgba(255,215,0,0.9);
+            box-shadow: 0 25px 40px rgba(0,0,0,0.5);
+            min-width: 280px;
+            pointer-events: none;
+        }
+        .win-toast.show {
+            opacity: 1;
+            visibility: visible;
+            transform: translate(-50%, -50%) scale(1);
+            pointer-events: auto;
+        }
+        .win-toast h3 {
+            font-size: 2rem;
+            color: gold;
+            margin-bottom: 12px;
+        }
+        .win-toast p {
+            color: white;
+            font-size: 1.2rem;
+            margin: 12px 0;
+        }
+        .close-win {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            margin-top: 16px;
+            padding: 8px 24px;
+            border-radius: 40px;
+            font-weight: bold;
+            color: white;
+            cursor: pointer;
+            backdrop-filter: blur(4px);
+        }
+
+        .feedback {
+            text-align: center;
+            margin-top: 12px;
+            font-weight: 500;
+            color: #ffefc0;
+            background: rgba(0,0,0,0.3);
+            padding: 6px;
+            border-radius: 60px;
+        }
+
+        /* 滚动条 */
+        .history-list::-webkit-scrollbar {
+            width: 4px;
+        }
+        .history-list::-webkit-scrollbar-track {
+            background: rgba(255,255,255,0.2);
+            border-radius: 10px;
+        }
+        .history-list::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.7);
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<!-- 可自由拖拽的主玻璃面板 -->
+<div class="glass-panel" id="draggablePanel">
+    <!-- 拖拽手柄区 (整个横条可拖拽) -->
+    <div class="drag-handle" id="dragHandle">
+        <span class="drag-icon">⋮⋮</span>
+        <div class="title">🔢 猜数字</div>
+        <span class="drag-icon">☷☷</span>
+    </div>
+
+    <div class="game-content">
+        <div class="hint-text">
+            ✨ 请输入四个不重复数字 (0-9) ✨
+        </div>
+
+        <div class="digit-inputs">
+            <div class="digit-box"><input type="text" maxlength="1" inputmode="numeric" id="digit0" placeholder="?" autocomplete="off"></div>
+            <div class="digit-box"><input type="text" maxlength="1" inputmode="numeric" id="digit1" placeholder="?" autocomplete="off"></div>
+            <div class="digit-box"><input type="text" maxlength="1" inputmode="numeric" id="digit2" placeholder="?" autocomplete="off"></div>
+            <div class="digit-box"><input type="text" maxlength="1" inputmode="numeric" id="digit3" placeholder="?" autocomplete="off"></div>
+        </div>
+
+        <div class="action-buttons">
+            <button class="btn btn-primary" id="guessBtn">✨ 猜 测 ✨</button>
+            <button class="btn btn-secondary" id="resetBtn">🔄 重开游戏</button>
+        </div>
+
+        <div class="info-area">
+            <div class="guess-count">
+                <span>🎯 猜测次数</span>
+                <span id="attemptCount">0</span>
+            </div>
+            <div class="history-title">📋 历史记录 (数字 | 结果)</div>
+            <div class="history-list" id="historyList">
+                <div style="text-align:center; opacity:0.7;">暂无记录</div>
+            </div>
+            <div class="feedback" id="feedbackMsg"></div>
+        </div>
+    </div>
+</div>
+
+<!-- 胜利浮层 -->
+<div id="winModal" class="win-toast">
+    <h3>🎉 恭喜通关 🎉</h3>
+    <p id="winMessage">你猜了 X 次 答对了！</p>
+    <button class="close-win" id="closeWinBtn">继续游戏</button>
+    <div style="font-size:12px; margin-top:8px;">点击「重开游戏」开始新对局</div>
+</div>
+
+<script>
+    // ======================== 游戏核心逻辑 ========================
+    let secretNumber = [];
+    let attempts = 0;
+    let history = [];
+    let gameActive = true;
+
+    const inputs = [
+        document.getElementById('digit0'),
+        document.getElementById('digit1'),
+        document.getElementById('digit2'),
+        document.getElementById('digit3')
+    ];
+    const guessBtn = document.getElementById('guessBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const attemptSpan = document.getElementById('attemptCount');
+    const historyDiv = document.getElementById('historyList');
+    const feedbackMsg = document.getElementById('feedbackMsg');
+    const winModal = document.getElementById('winModal');
+    const winMessageSpan = document.getElementById('winMessage');
+    const closeWinBtn = document.getElementById('closeWinBtn');
+
+    function generateSecret() {
+        const digits = [0,1,2,3,4,5,6,7,8,9];
+        for (let i = digits.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [digits[i], digits[j]] = [digits[j], digits[i]];
+        }
+        return digits.slice(0,4);
+    }
+
+    function resetGame() {
+        secretNumber = generateSecret();
+        attempts = 0;
+        history = [];
+        gameActive = true;
+        updateAttemptDisplay();
+        renderHistory();
+        clearInputs();
+        feedbackMsg.innerText = '✨ 新游戏！输入四位不重复数字 ✨';
+        guessBtn.disabled = false;
+        guessBtn.style.opacity = '1';
+        winModal.classList.remove('show');
+        console.log("新答案(调试):", secretNumber.join('')); // 可删除
+    }
+
+    function clearInputs() {
+        inputs.forEach(inp => inp.value = '');
+    }
+
+    function updateAttemptDisplay() {
+        attemptSpan.innerText = attempts;
+    }
+
+    function renderHistory() {
+        if (history.length === 0) {
+            historyDiv.innerHTML = '<div style="text-align:center; opacity:0.7;">📭 暂无记录</div>';
+            return;
+        }
+        let html = '';
+        for (let item of history) {
+            html += `
+                <div class="history-item">
+                    <span class="history-number">🔢 ${item.guessStr}</span>
+                    <span class="history-result">${item.result}</span>
+                </div>
+            `;
+        }
+        historyDiv.innerHTML = html;
+    }
+
+    function calculateAB(guessArr, secretArr) {
+        let A = 0, B = 0;
+        for (let i = 0; i < 4; i++) {
+            if (guessArr[i] === secretArr[i]) A++;
+            else if (secretArr.includes(guessArr[i])) B++;
+        }
+        return { A, B };
+    }
+
+    function validateInputs() {
+        const values = [];
+        for (let i = 0; i < inputs.length; i++) {
+            let val = inputs[i].value.trim();
+            if (val.length === 0) {
+                feedbackMsg.innerText = `⚠️ 第${i+1}位不能为空！`;
+                return null;
+            }
+            if (!/^\d$/.test(val)) {
+                feedbackMsg.innerText = `⚠️ 只能输入单个数字(0-9)`;
+                return null;
+            }
+            values.push(parseInt(val, 10));
+        }
+        const uniqueSet = new Set(values);
+        if (uniqueSet.size !== 4) {
+            feedbackMsg.innerText = `❌ 四个数字必须互不相同！`;
+            return null;
+        }
+        return values;
+    }
+
+    function handleGuess() {
+        if (!gameActive) {
+            feedbackMsg.innerText = '🏆 游戏已胜利，请点击「重开游戏」继续挑战！';
+            return;
+        }
+        const guessArray = validateInputs();
+        if (!guessArray) return;
+
+        attempts++;
+        updateAttemptDisplay();
+
+        const { A, B } = calculateAB(guessArray, secretNumber);
+        const resultStr = `${A}A${B}B`;
+        const guessStr = guessArray.join('');
+        history.push({ guessStr, result: resultStr });
+        renderHistory();
+
+        feedbackMsg.innerText = `📢 猜测: ${guessStr}  →  ${resultStr}`;
+
+        if (A === 4) {
+            gameActive = false;
+            guessBtn.disabled = true;
+            guessBtn.style.opacity = '0.6';
+            winMessageSpan.innerText = `🎉 你用了 ${attempts} 次猜中正确数字 ${secretNumber.join('')} 🎉`;
+            winModal.classList.add('show');
+            feedbackMsg.innerText = `🎉 恭喜答对！共猜测 ${attempts} 次，点击重开继续 🎉`;
+        } else {
+            clearInputs();
+            inputs[0].focus();
+        }
+    }
+
+    function closeWinPopup() {
+        winModal.classList.remove('show');
+        if (!gameActive) {
+            feedbackMsg.innerText = '🎯 游戏已胜利，点击「重开游戏」开始新的一局吧 🎯';
+        }
+    }
+
+    // ======================== 自由拖拽 (上下左右) ========================
+    const panel = document.getElementById('draggablePanel');
+    const dragHandle = document.getElementById('dragHandle');
+    let isDragging = false;
+    let startX = 0, startY = 0;
+    let startLeft = 0, startTop = 0;
+
+    // 获取当前面板 left 值 (px)
+    function getCurrentLeft() {
+        const leftVal = window.getComputedStyle(panel).left;
+        return parseFloat(leftVal);
+    }
+
+    function getCurrentTop() {
+        const topVal = window.getComputedStyle(panel).top;
+        return parseFloat(topVal);
+    }
+
+    // 设置位置，并约束在视口内
+    function setPanelPosition(leftPx, topPx, constrain = true) {
+        let newLeft = leftPx;
+        let newTop = topPx;
+        if (constrain) {
+            const winWidth = window.innerWidth;
+            const winHeight = window.innerHeight;
+            const panelWidth = panel.offsetWidth;
+            const panelHeight = panel.offsetHeight;
+            const minLeft = 8;
+            const maxLeft = winWidth - panelWidth - 8;
+            const minTop = 8;
+            const maxTop = winHeight - panelHeight - 8;
+            newLeft = Math.min(maxLeft, Math.max(minLeft, newLeft));
+            newTop = Math.min(maxTop, Math.max(minTop, newTop));
+        }
+        panel.style.left = `${newLeft}px`;
+        panel.style.top = `${newTop}px`;
+        panel.style.transform = 'none';  // 取消居中 transform
+    }
+
+    // 初始化面板位置（屏幕中央偏上）
+    function initPanelPosition() {
+        const winWidth = window.innerWidth;
+        const winHeight = window.innerHeight;
+        const panelWidth = panel.offsetWidth;
+        const panelHeight = panel.offsetHeight;
+        let left = (winWidth - panelWidth) / 2;
+        let top = winHeight * 0.2;
+        if (top < 8) top = 8;
+        if (top + panelHeight > winHeight - 8) top = winHeight - panelHeight - 8;
+        setPanelPosition(left, top, true);
+    }
+
+    function onDragStart(e) {
+        e.preventDefault();
+        let clientX, clientY;
+        if (e.type === 'mousedown') {
+            clientX = e.clientX;
+            clientY = e.clientY;
+            window.addEventListener('mousemove', onDragMove);
+            window.addEventListener('mouseup', onDragEnd);
+        } else {
+            clientX = e.touches[0].clientX;
+            clientY = e.touches[0].clientY;
+            window.addEventListener('touchmove', onDragMove, { passive: false });
+            window.addEventListener('touchend', onDragEnd);
+            window.addEventListener('touchcancel', onDragEnd);
+        }
+        isDragging = true;
+        startX = clientX;
+        startY = clientY;
+        startLeft = getCurrentLeft();
+        startTop = getCurrentTop();
+        if (isNaN(startLeft)) startLeft = 0;
+        if (isNaN(startTop)) startTop = 0;
+        panel.style.transition = 'none';
+        document.body.style.cursor = 'grabbing';
+        dragHandle.style.cursor = 'grabbing';
+    }
+
+    function onDragMove(e) {
+        if (!isDragging) return;
+        let currentX, currentY;
+        if (e.type === 'mousemove') {
+            currentX = e.clientX;
+            currentY = e.clientY;
+        } else {
+            currentX = e.touches[0].clientX;
+            currentY = e.touches[0].clientY;
+            e.preventDefault();
+        }
+        const deltaX = currentX - startX;
+        const deltaY = currentY - startY;
+        let newLeft = startLeft + deltaX;
+        let newTop = startTop + deltaY;
+        setPanelPosition(newLeft, newTop, true);
+    }
+
+    function onDragEnd() {
+        if (!isDragging) return;
+        isDragging = false;
+        panel.style.transition = '';
+        document.body.style.cursor = '';
+        dragHandle.style.cursor = 'grab';
+        window.removeEventListener('mousemove', onDragMove);
+        window.removeEventListener('mouseup', onDragEnd);
+        window.removeEventListener('touchmove', onDragMove);
+        window.removeEventListener('touchend', onDragEnd);
+        window.removeEventListener('touchcancel', onDragEnd);
+        // 最终约束一次
+        const finalLeft = getCurrentLeft();
+        const finalTop = getCurrentTop();
+        setPanelPosition(finalLeft, finalTop, true);
+    }
+
+    dragHandle.addEventListener('mousedown', onDragStart);
+    dragHandle.addEventListener('touchstart', onDragStart, { passive: false });
+    dragHandle.ondragstart = (e) => e.preventDefault();
+
+    window.addEventListener('resize', () => {
+        if (!isDragging) {
+            const curLeft = getCurrentLeft();
+            const curTop = getCurrentTop();
+            if (!isNaN(curLeft) && !isNaN(curTop)) {
+                setPanelPosition(curLeft, curTop, true);
+            } else {
+                initPanelPosition();
+            }
+        }
+    });
+
+    // ======================== 输入框自动导航 ========================
+    function setupInputNavigation() {
+        inputs.forEach((input, idx) => {
+            input.addEventListener('input', (e) => {
+                let val = e.target.value;
+                val = val.replace(/[^\d]/g, '');
+                if (val.length > 1) val = val.charAt(0);
+                input.value = val;
+                if (val.length === 1 && idx < 3) {
+                    inputs[idx+1].focus();
+                }
+            });
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Backspace' && input.value === '' && idx > 0) {
+                    inputs[idx-1].focus();
+                }
+            });
+        });
+    }
+
+    // ======================== 初始化 ========================
+    closeWinBtn.addEventListener('click', closeWinPopup);
+    resetBtn.addEventListener('click', () => {
+        resetGame();
+        winModal.classList.remove('show');
+        gameActive = true;
+        guessBtn.disabled = false;
+        guessBtn.style.opacity = '1';
+        feedbackMsg.innerText = '🔄 游戏已重置，新随机数字已生成！开始猜吧~';
+        clearInputs();
+        inputs[0].focus();
+    });
+    guessBtn.addEventListener('click', handleGuess);
+
+    function init() {
+        resetGame();
+        initPanelPosition();
+        setupInputNavigation();
+        setTimeout(() => inputs[0]?.focus(), 100);
+    }
+    init();
+</script>
+</body>
+</html>
